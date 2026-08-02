@@ -172,8 +172,11 @@
       </div>
     </div>
     <div id="perchart"></div>
-    <p class="note">선에 마우스를 올리면 종목·PER·산출근거가 뜹니다. 아래 표는 <strong>현재 시점 PER</strong> 전체 목록이며,
-      <span class="neg">적자비중</span>이 높은 ETF는 PER 해석에 주의가 필요합니다(합산 이익이 적자면 PER 자체가 성립하지 않습니다).</p>
+    <p class="note" id="pernote">선에 마우스를 올리면 종목·PER·산출근거가 뜹니다. 아래 표는 <strong>현재 시점 PER</strong> 전체 목록이며,
+      <span class="neg">적자비중</span>이 높은 ETF는 PER 해석에 주의가 필요합니다(합산 이익이 적자면 PER 자체가 성립하지 않습니다).
+      <strong>직접계산</strong> <span class="legend-line" style="border-top-style:solid;border-color:var(--muted)"></span>실선 ·
+      <strong>지수공시</strong> <span class="legend-line" style="border-top-style:dashed;border-color:var(--muted)"></span>점선. 하단 슬라이더로 기간 조정.</p>
+    <div class="legendbar" id="perlegend"></div>
     <div class="tblwrap" id="perwrap" style="display:block">
       <table id="pertbl"><thead><tr>
         <th>종류</th><th>상장</th><th>종목</th><th>PER</th><th>적자비중</th><th>산출근거</th><th>비고</th>
@@ -294,7 +297,7 @@
   }
 
   var lastSeries=[];
-  function render(keepZoom){ var opt=option(keepZoom); lastSeries=opt.series; chart.setOption(opt, {notMerge:true}); refreshTable(); refreshFeeTable(); if(typeof refreshPer==="function") refreshPer(); updateLegendState(); }
+  function render(keepZoom){ var opt=option(keepZoom); lastSeries=opt.series; chart.setOption(opt, {notMerge:true}); refreshTable(); refreshFeeTable(); if(typeof refreshPer==="function") refreshPer(true); updateLegendState(); }
 
   // ---- chips: kinds ----
   var kc = document.getElementById("kindChips");
@@ -499,36 +502,48 @@
   var perChart = echarts.init(document.getElementById("perchart"), null, {renderer:"canvas"});
   function perColor(p){ return colorByName[p.name] || kindColor(p.kind); }
 
-  function refreshPer(){
-    var vis=PERSERIES.filter(function(p){ return !hiddenKinds[p.kind] && !hiddenMkts[p.mkt]; });
-    var muted=cssVar("--muted"), grid=cssVar("--grid"), axis=cssVar("--axis"), surf=cssVar("--surface"), ink=cssVar("--ink");
-    document.getElementById("perchart").style.height="440px"; perChart.resize();
+  var perTMin=null, perTMax=null, perLast=[], perLegendItems={}, perHidden={};
+  (function(){
+    var ts=[]; PERSERIES.forEach(function(p){ p.data.forEach(function(d){ ts.push(+new Date(d[0])); }); });
+    if(ts.length){ perTMin=Math.min.apply(null,ts); perTMax=Math.max.apply(null,ts); }
+  })();
+  function perLineStyle(p){ return p.basis==="직접계산" ? "solid" : "dashed"; }
+  function perColorOf(p){ return colorByName[p.name] || kindColor(p.kind); }
+
+  function refreshPer(keepZoom){
+    var muted=cssVar("--muted"), grid=cssVar("--grid"), axis=cssVar("--axis"), surf=cssVar("--surface");
+    var dzS=perTMin, dzE=perTMax;
+    if(keepZoom){                       // 최초 호출 땐 아직 setOption 전이라 getOption()이 undefined
+      var op=perChart.getOption(); var dz=op&&op.dataZoom;
+      if(dz&&dz[0]&&dz[0].startValue!=null){ dzS=+dz[0].startValue; dzE=+dz[0].endValue; } }
+    perLast = PERSERIES.map(function(p){
+      var hidden = hiddenKinds[p.kind] || hiddenMkts[p.mkt] || perHidden[p.name];
+      var col=perColorOf(p);
+      return { name:p.name, type:"line", showSymbol:false, symbol:"circle", symbolSize:7, sampling:"lttb",
+        lineStyle:{width:2, type:perLineStyle(p), color:col}, itemStyle:{color:col},
+        emphasis:{focus:"series", lineStyle:{width:3.5}}, blur:{lineStyle:{opacity:0.12}},
+        _kind:p.kind, _mkt:p.mkt, _basis:p.basis, _src:p.src, _note:p.note,
+        data: hidden ? [] : p.data };
+    });
+    document.getElementById("perchart").style.height="672px"; perChart.resize();
     perChart.setOption({
       backgroundColor:"transparent", animationDuration:300,
-      grid:{left:52,right:18,top:16,bottom:64},
-      legend:{show:true, type:"scroll", bottom:0, textStyle:{color:muted,fontSize:11}, itemWidth:18, itemHeight:2},
-      tooltip:{trigger:"axis", backgroundColor:surf, borderColor:cssVar("--border"), textStyle:{color:ink,fontSize:12},
-        formatter:function(ps){
-          if(!ps.length) return "";
-          var out="<b>"+ps[0].axisValueLabel.slice(0,7)+"</b>";
-          ps.forEach(function(x){
-            var meta=vis.filter(function(v){return v.name===x.seriesName;})[0]||{};
-            out+="<br/>"+x.marker+x.seriesName+" <b>"+(x.value[1]!=null?x.value[1].toFixed(1):"-")+"</b>"
-               + "<span style='opacity:.6;font-size:11px'> ("+(meta.basis||"")+")</span>";
-          });
-          return out;
-        }},
+      grid:{left:52,right:18,top:16,bottom:78},
+      legend:{show:false}, tooltip:{show:false},
       xAxis:{type:"time", axisLine:{lineStyle:{color:axis}}, axisLabel:{color:muted}, splitLine:{show:false}},
-      yAxis:{type:"value", scale:true, name:"PER (배)", nameTextStyle:{color:muted,align:"left"},
+      yAxis:{type:"value", scale:true, name:"PER (배)", nameTextStyle:{color:muted, align:"left"},
         axisLabel:{color:muted}, axisLine:{show:false}, axisTick:{show:false}, splitLine:{lineStyle:{color:grid}}},
-      series: vis.map(function(p){
-        var col=colorByName[p.name]||kindColor(p.kind);
-        return {name:p.name, type:"line", showSymbol:false, smooth:false,
-          lineStyle:{width:2, type:(p.basis==="직접계산"?"solid":"dashed"), color:col},
-          itemStyle:{color:col}, emphasis:{focus:"series", lineStyle:{width:3.5}},
-          blur:{lineStyle:{opacity:0.15}}, data:p.data};
-      })
+      dataZoom:[
+        {type:"inside", startValue:dzS, endValue:dzE, zoomOnMouseWheel:true, moveOnMouseMove:true},
+        {type:"slider", startValue:dzS, endValue:dzE, height:26, bottom:22,
+         borderColor:cssVar("--border"), backgroundColor:"transparent",
+         fillerColor:"rgba(120,120,120,0.12)", dataBackground:{lineStyle:{color:axis},areaStyle:{color:grid}},
+         handleStyle:{color:surf,borderColor:axis}, textStyle:{color:muted}}
+      ],
+      series: perLast
     }, {notMerge:true});
+    updatePerLegendState();
+
     // 표는 "현재 시점 PER" 전체 목록(39행) — 월별 시계열이 없는 종목까지 사유와 함께 보여준다
     var tb=document.querySelector("#pertbl tbody"); tb.innerHTML="";
     var all=PERS.filter(function(p){ return !hiddenKinds[p.kind] && !hiddenMkts[p.mkt]; })
@@ -550,6 +565,79 @@
       tb.appendChild(tr);
     });
   }
+
+  // ---- PER 범례 (테마별 그룹, 클릭=표시/숨김, 호버=양방향 강조) — 지수차트와 동일 동작 ----
+  (function buildPerLegend(){
+    var wrap=document.getElementById("perlegend"); if(!wrap) return;
+    kinds.forEach(function(k){
+      var list=PERSERIES.filter(function(p){return p.kind===k;});
+      if(!list.length) return;
+      var g=document.createElement("div"); g.className="lgroup";
+      var h=document.createElement("div"); h.className="ghead";
+      var d=document.createElement("span"); d.style.cssText="width:9px;height:9px;border-radius:2px;flex:0 0 auto;background:"+kindColor(k);
+      h.appendChild(d); h.appendChild(document.createTextNode(k)); g.appendChild(h);
+      list.forEach(function(p){
+        var it=document.createElement("button"); it.className="litem"; it.setAttribute("aria-pressed","true");
+        var ln=document.createElement("span"); ln.className="lline";
+        ln.style.borderTopStyle=perLineStyle(p); ln.style.borderTopColor=perColorOf(p);
+        it.appendChild(ln); it.appendChild(document.createTextNode(p.name));
+        it.onclick=function(){ perHidden[p.name]=!perHidden[p.name]; refreshPer(true); };
+        it.onmouseenter=function(){ if(!perHidden[p.name]) perChart.dispatchAction({type:"highlight",seriesName:p.name}); };
+        it.onmouseleave=function(){ perChart.dispatchAction({type:"downplay",seriesName:p.name}); };
+        perLegendItems[p.name]=it; g.appendChild(it);
+      });
+      wrap.appendChild(g);
+    });
+  })();
+  function updatePerLegendState(){
+    PERSERIES.forEach(function(p){
+      var it=perLegendItems[p.name]; if(!it) return;
+      var hid = hiddenKinds[p.kind]||hiddenMkts[p.mkt]||perHidden[p.name];
+      it.setAttribute("aria-pressed", hid?"false":"true");
+    });
+  }
+  var _perHl=null;
+  function highlightPerLegend(name){
+    if(name===_perHl) return; _perHl=name;
+    Object.keys(perLegendItems).forEach(function(n){ perLegendItems[n].classList.toggle("hl", n===name); });
+  }
+
+  // ---- PER 차트 커스텀 툴팁 (선 어디에 올려도 최근접 종목) — 지수차트와 동일 방식 ----
+  var perZr=perChart.getZr();
+  function hidePerTip(){ tipEl.style.display="none"; perChart.dispatchAction({type:"downplay"}); highlightPerLegend(null); }
+  perZr.on("mousemove", function(e){
+    var xv=perChart.convertFromPixel({xAxisIndex:0}, e.offsetX);
+    if(!isFinite(xv)){ hidePerTip(); return; }
+    var best=null;
+    for(var si=0; si<perLast.length; si++){
+      var d=perLast[si].data; if(!d||!d.length) continue;
+      var di=nearestIdx(d, xv);
+      var px=perChart.convertToPixel({seriesIndex:si}, [d[di][0], d[di][1]]);
+      if(!px) continue;
+      var dist=Math.abs(px[1]-e.offsetY) + Math.abs(px[0]-e.offsetX)*0.25;
+      if(!best || dist<best.dist) best={si:si, di:di, dist:dist};
+    }
+    if(!best){ hidePerTip(); return; }
+    var s=perLast[best.si], pt=s.data[best.di], col=perColorOf({name:s.name,kind:s._kind});
+    tipEl.innerHTML='<div class="t-date"></div><div class="t-name"><i></i><span></span></div>'
+      +'<div class="t-val"></div><div class="t-ret"></div><div class="t-meta"></div>';
+    tipEl.querySelector(".t-date").textContent=pt[0].slice(0,7);
+    tipEl.querySelector(".t-name i").style.background=col;
+    tipEl.querySelector(".t-name span").textContent=s.name;
+    tipEl.querySelector(".t-val").textContent=pt[1].toFixed(1)+"배";
+    var rt=tipEl.querySelector(".t-ret"); rt.textContent=s._basis; rt.style.color=cssVar("--ink2");
+    tipEl.querySelector(".t-meta").textContent=(s._kind||"")+" · "+(s._mkt||"")+"상장 · "+(s._src||"");
+    var rect=perChart.getDom().getBoundingClientRect();
+    var cx=rect.left+e.offsetX, cy=rect.top+e.offsetY;
+    tipEl.style.display="block";
+    var tw=tipEl.offsetWidth, th=tipEl.offsetHeight;
+    var lx=cx+14; if(lx+tw>window.innerWidth-8) lx=cx-14-tw;
+    var ly=cy+14; if(ly+th>window.innerHeight-8) ly=cy-14-th;
+    tipEl.style.left=lx+"px"; tipEl.style.top=Math.max(8,ly)+"px";
+    perChart.dispatchAction({type:"highlight", seriesIndex:best.si});
+    highlightPerLegend(s.name);
+  });
+  perZr.on("globalout", hidePerTip);
 
   render(false);
   refreshPer();
