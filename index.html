@@ -197,11 +197,14 @@
     for(var i=0;i<s.data.length;i++){ if(+new Date(s.data[i][0])>=startTs) return s.data[i][1]; }
     return s.data[0][1];
   }
+  // ⚠️ dataZoom의 start(%)를 tMin~tMax로 환산하면 안 된다.
+  // ECharts 시간축의 실제 구간은 [tMin,tMax]가 아니라 눈금 경계까지 확장돼 있어서
+  // 퍼센트→시각 환산이 몇 달씩 어긋난다(실측 245일). startValue(실제 시각)를 그대로 쓴다.
   function currentStartTs(){
     if(!rebaseVisible) return -Infinity;
     var dz = chart.getOption().dataZoom;
-    var pct = (dz && dz[0] && typeof dz[0].start==="number") ? dz[0].start : 0;
-    return tMin + (tMax - tMin) * (pct/100);
+    var sv = (dz && dz[0] && dz[0].startValue != null) ? +dz[0].startValue : null;
+    return sv != null ? sv : tMin;
   }
 
   function buildSeries(){
@@ -223,8 +226,12 @@
   }
 
   function option(keepZoom){
-    var dzStart = 0, dzEnd = 100;
-    if(keepZoom){ var dz=chart.getOption().dataZoom; if(dz&&dz[0]){dzStart=dz[0].start;dzEnd=dz[0].end;} }
+    // 퍼센트(start/end) 대신 실제 시각(startValue/endValue)으로 구간을 보존한다 — currentStartTs() 주석 참고
+    var dzStart = tMin, dzEnd = tMax;
+    if(keepZoom){
+      var dz=chart.getOption().dataZoom;
+      if(dz&&dz[0]&&dz[0].startValue!=null){ dzStart=+dz[0].startValue; dzEnd=+dz[0].endValue; }
+    }
     var ink=cssVar("--ink"), ink2=cssVar("--ink2"), muted=cssVar("--muted"),
         grid=cssVar("--grid"), axis=cssVar("--axis"), surf=cssVar("--surface");
     return {
@@ -240,8 +247,8 @@
         axisLabel:{color:muted}, axisLine:{show:false}, axisTick:{show:false},
         splitLine:{lineStyle:{color:grid}} },
       dataZoom:[
-        {type:"inside", start:dzStart, end:dzEnd, zoomOnMouseWheel:true, moveOnMouseMove:true},
-        {type:"slider", start:dzStart, end:dzEnd, height:26, bottom:22,
+        {type:"inside", startValue:dzStart, endValue:dzEnd, zoomOnMouseWheel:true, moveOnMouseMove:true},
+        {type:"slider", startValue:dzStart, endValue:dzEnd, height:26, bottom:22,
          borderColor:cssVar("--border"), backgroundColor:"transparent",
          fillerColor:"rgba(120,120,120,0.12)", dataBackground:{lineStyle:{color:axis},areaStyle:{color:grid}},
          handleStyle:{color:surf,borderColor:axis}, textStyle:{color:muted}}
@@ -337,8 +344,9 @@
     else if(kind==="5"){ start=+new Date(d.getFullYear()-5,d.getMonth(),1); }
     else if(kind==="ytd"){ start=+new Date(d.getFullYear(),0,1); }
     else { start=tMin; }
-    var s=Math.max(0,(start-tMin)/(tMax-tMin)*100), e=100;
-    chart.setOption({dataZoom:[{start:s,end:e},{start:s,end:e}]});
+    start=Math.max(tMin,start);
+    // 퍼센트로 넣으면 축 확장 때문에 "최근 3년"이 2.3년으로 보인다 → 실제 시각으로 지정
+    chart.setOption({dataZoom:[{startValue:start,endValue:tMax},{startValue:start,endValue:tMax}]});
     if(rebaseVisible) render(true);
   }
   document.querySelectorAll("#rangeChips .chip").forEach(function(b){
