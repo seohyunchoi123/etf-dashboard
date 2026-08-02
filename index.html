@@ -161,13 +161,45 @@
   <div class="card">
     <div class="filters" style="padding-bottom:0">
       <div class="fgroup">
-        <span class="flabel">월별 PER 추이 (위 테마·상장 필터 연동)</span>
+        <span class="flabel">테마 (클릭해 표시/숨김)</span>
+        <div class="chips" id="perKindChips"></div>
+      </div>
+      <div class="fgroup">
+        <span class="flabel">상장</span>
+        <div class="chips" id="perMktChips">
+          <button class="chip" data-mkt="국내" aria-pressed="true">국내</button>
+          <button class="chip" data-mkt="미국" aria-pressed="true">미국</button>
+        </div>
+      </div>
+      <div class="fgroup">
+        <span class="flabel">기간</span>
+        <div class="chips" id="perRangeChips">
+          <button class="chip" data-range="all" aria-pressed="true">전체</button>
+          <button class="chip" data-range="1">최근 1년</button>
+          <button class="chip" data-range="3">최근 3년</button>
+          <button class="chip" data-range="5">최근 5년</button>
+          <button class="chip" data-range="ytd">YTD</button>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="fgroup">
+        <span class="flabel">보기</span>
+        <div class="chips">
+          <button class="chip" id="perLossBtn" aria-pressed="false" title="합산 이익 기준으로 바꿉니다. 편입 종목 합산이 적자면 PER을 -1로 표시합니다.">적자 −1 표기</button>
+          <button class="chip" id="perTblBtn" aria-pressed="true">표로 보기</button>
+        </div>
+      </div>
+    </div>
+    <div class="filters" style="padding-top:0">
+      <div class="fgroup">
+        <span class="flabel">월별 PER 추이</span>
         <p class="note" style="padding:0;max-width:960px">
           두 갈래로 구했습니다. <strong>지수 추종 ETF</strong>는 기초지수 사업자가 공시하는 지수 PER을 그대로 씁니다
           (Nifty 50 · S&amp;P 500 · CSI 300 — ETF가 지수를 복제하므로 사실상 동일).
           <strong>국내 주식형 ETF</strong>는 운용사에서 받은 현재 보유종목을 고정하고, 각 종목의 <em>과거 월별 주가 × 그 시점 확정 EPS</em>로 역산했습니다.
           흑자 종목만 가중(지수 관행)이며, 매년 4월 사업보고서 반영 시점에 계단식으로 움직입니다.
           <strong>미국상장 ETF는 과거 PER 시계열을 공개하는 소스가 없어</strong> 아래 표에 현재값만 넣었습니다.
+          <br><strong id="perBasisNote">흑자 종목만 가중한 PER (지수 산출 관행). 적자 비중은 툴팁·표에서 확인하세요.</strong>
         </p>
       </div>
     </div>
@@ -307,32 +339,45 @@
   var allBtn=document.createElement("button");
   allBtn.className="chip"; allBtn.id="kindAllBtn"; allBtn.style.fontWeight="600";
   allBtn.title="테마 전체를 한 번에 켜고 끕니다. 하나만 보려면 '전체 해제' 후 원하는 테마만 클릭하세요.";
-  allBtn.onclick=function(){
-    var allOn=kinds.every(function(k){return !hiddenKinds[k];});
-    kinds.forEach(function(k){ hiddenKinds[k]=allOn; });   // 전부 켜져 있으면 전부 끄고, 아니면 전부 켠다
-    syncKindChips(); render(true);
-  };
-  kc.appendChild(allBtn);
-
-  kinds.forEach(function(k){
-    var b=document.createElement("button"); b.className="chip"; b.setAttribute("aria-pressed","true");
-    var dot=document.createElement("span"); dot.className="dot"; dot.style.background=kindColor(k);
-    b.appendChild(dot); b.appendChild(document.createTextNode(k));
-    b.onclick=function(){ hiddenKinds[k]=!hiddenKinds[k]; syncKindChips(); render(true); };
-    kindBtns[k]=b; kc.appendChild(b);
+  // 테마/상장 칩은 상단·PER 두 곳에 같은 상태로 만든다(한쪽을 누르면 양쪽 다 갱신)
+  var allBtns=[], kindBtnSets=[];
+  function afterFilterChange(){ syncKindChips(); render(true); }
+  [document.getElementById("kindChips"), document.getElementById("perKindChips")].forEach(function(box){
+    if(!box) return;
+    var ab=(box===kc)?allBtn:document.createElement("button");
+    ab.className="chip"; ab.style.fontWeight="600";
+    ab.title="테마 전체를 한 번에 켜고 끕니다. 하나만 보려면 '전체 해제' 후 원하는 테마만 클릭하세요.";
+    ab.onclick=function(){
+      var allOn=kinds.every(function(k){return !hiddenKinds[k];});
+      kinds.forEach(function(k){ hiddenKinds[k]=allOn; });
+      afterFilterChange();
+    };
+    if(box!==kc) box.appendChild(ab); allBtns.push(ab);
+    var set={};
+    kinds.forEach(function(k){
+      var b=document.createElement("button"); b.className="chip"; b.setAttribute("aria-pressed","true");
+      var dot=document.createElement("span"); dot.className="dot"; dot.style.background=kindColor(k);
+      b.appendChild(dot); b.appendChild(document.createTextNode(k));
+      b.onclick=function(){ hiddenKinds[k]=!hiddenKinds[k]; afterFilterChange(); };
+      set[k]=b; box.appendChild(b);
+    });
+    kindBtnSets.push(set);
   });
-
   function syncKindChips(){
-    kinds.forEach(function(k){ kindBtns[k].setAttribute("aria-pressed", hiddenKinds[k]?"false":"true"); });
+    kindBtnSets.forEach(function(set){
+      kinds.forEach(function(k){ if(set[k]) set[k].setAttribute("aria-pressed", hiddenKinds[k]?"false":"true"); });
+    });
     var allOn=kinds.every(function(k){return !hiddenKinds[k];});
-    allBtn.textContent = allOn ? "전체 해제" : "전체 선택";
-    allBtn.setAttribute("aria-pressed", allOn?"true":"false");
+    allBtns.forEach(function(ab){ ab.textContent = allOn ? "전체 해제" : "전체 선택";
+      ab.setAttribute("aria-pressed", allOn?"true":"false"); });
+    document.querySelectorAll("#mktChips .chip, #perMktChips .chip").forEach(function(b){
+      b.setAttribute("aria-pressed", hiddenMkts[b.dataset.mkt]?"false":"true"); });
   }
   syncKindChips();
 
   // ---- chips: market (국내/미국) ----
-  document.querySelectorAll("#mktChips .chip").forEach(function(b){
-    b.onclick=function(){ var on=b.getAttribute("aria-pressed")==="true"; b.setAttribute("aria-pressed",on?"false":"true"); hiddenMkts[b.dataset.mkt]=on; render(true); };
+  document.querySelectorAll("#mktChips .chip, #perMktChips .chip").forEach(function(b){
+    b.onclick=function(){ hiddenMkts[b.dataset.mkt]=!hiddenMkts[b.dataset.mkt]; afterFilterChange(); };
   });
 
   // ---- legend (per-fund, grouped by theme) ----
@@ -502,7 +547,7 @@
   var perChart = echarts.init(document.getElementById("perchart"), null, {renderer:"canvas"});
   function perColor(p){ return colorByName[p.name] || kindColor(p.kind); }
 
-  var perTMin=null, perTMax=null, perLast=[], perLegendItems={}, perHidden={};
+  var perTMin=null, perTMax=null, perLast=[], perLegendItems={}, perHidden={}, perUseAll=false;
   (function(){
     var ts=[]; PERSERIES.forEach(function(p){ p.data.forEach(function(d){ ts.push(+new Date(d[0])); }); });
     if(ts.length){ perTMin=Math.min.apply(null,ts); perTMax=Math.max.apply(null,ts); }
@@ -523,7 +568,7 @@
         lineStyle:{width:2, type:perLineStyle(p), color:col}, itemStyle:{color:col},
         emphasis:{focus:"series", lineStyle:{width:3.5}}, blur:{lineStyle:{opacity:0.12}},
         _kind:p.kind, _mkt:p.mkt, _basis:p.basis, _src:p.src, _note:p.note,
-        data: hidden ? [] : p.data };
+        data: hidden ? [] : (perUseAll ? (p.dataAll||p.data) : p.data) };
     });
     document.getElementById("perchart").style.height="672px"; perChart.resize();
     perChart.setOption({
@@ -638,6 +683,36 @@
     highlightPerLegend(s.name);
   });
   perZr.on("globalout", hidePerTip);
+
+  // ---- PER 전용 기간 프리셋 / 적자−1 토글 / 표 토글 ----
+  function setPerRange(kind){
+    if(perTMin==null) return;
+    var d=new Date(perTMax), st;
+    if(kind==="1") st=+new Date(d.getFullYear()-1,d.getMonth(),1);
+    else if(kind==="3") st=+new Date(d.getFullYear()-3,d.getMonth(),1);
+    else if(kind==="5") st=+new Date(d.getFullYear()-5,d.getMonth(),1);
+    else if(kind==="ytd") st=+new Date(d.getFullYear(),0,1);
+    else st=perTMin;
+    st=Math.max(perTMin,st);
+    perChart.setOption({dataZoom:[{startValue:st,endValue:perTMax},{startValue:st,endValue:perTMax}]});
+  }
+  document.querySelectorAll("#perRangeChips .chip").forEach(function(b){
+    b.onclick=function(){
+      document.querySelectorAll("#perRangeChips .chip").forEach(function(x){x.setAttribute("aria-pressed","false");});
+      b.setAttribute("aria-pressed","true"); setPerRange(b.dataset.range);
+    };
+  });
+  var perLossBtn=document.getElementById("perLossBtn");
+  perLossBtn.onclick=function(){
+    perUseAll=!perUseAll; perLossBtn.setAttribute("aria-pressed",perUseAll?"true":"false");
+    document.getElementById("perBasisNote").textContent = perUseAll
+      ? "합산 이익 기준 — 편입 종목 합산이 적자면 PER을 −1로 표시합니다. 분모가 0에 가까운 구간은 값이 크게 튈 수 있습니다."
+      : "흑자 종목만 가중한 PER (지수 산출 관행). 적자 비중은 툴팁·표에서 확인하세요.";
+    refreshPer(true);
+  };
+  var perTblBtn=document.getElementById("perTblBtn"), perwrap=document.getElementById("perwrap"), showPerTbl=true;
+  perTblBtn.onclick=function(){ showPerTbl=!showPerTbl; perTblBtn.setAttribute("aria-pressed",showPerTbl?"true":"false");
+    perwrap.style.display=showPerTbl?"block":"none"; };
 
   render(false);
   refreshPer();
