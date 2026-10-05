@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nifty 50 — PER · 지수가격 월별 트렌드</title>
+<style>
+  :root{
+    color-scheme: light;
+    --surface-0:#f4f4f2; --surface-1:#fcfcfb; --surface-2:#eceae4;
+    --border:#d8d6cf; --border-strong:#b6b3aa;
+    --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#79776f;
+    --series-pe:#2a78d6; --series-px:#eb6834; --series-krw:#1baf7a;
+    --band:rgba(121,119,111,.13); --ref:#79776f;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242422;
+      --border:#34342f; --border-strong:#4d4d46;
+      --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#908e85;
+      --series-pe:#3987e5; --series-px:#d95926; --series-krw:#199e70;
+      --band:rgba(195,194,183,.12); --ref:#908e85;
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --surface-0:#121211; --surface-1:#1a1a19; --surface-2:#242422;
+    --border:#34342f; --border-strong:#4d4d46;
+    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#908e85;
+    --series-pe:#3987e5; --series-px:#d95926; --series-krw:#199e70;
+    --band:rgba(195,194,183,.12); --ref:#908e85;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--surface-0);color:var(--text-primary);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1440px;margin:0 auto;padding:28px 16px 72px}
+  header{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;justify-content:space-between;margin-bottom:6px}
+  h1{font-size:25px;letter-spacing:-.02em;margin:0 0 4px;font-weight:650}
+  .sub{color:var(--text-secondary);font-size:13.5px;margin:0}
+  .btn{font:inherit;font-size:13px;padding:7px 13px;border-radius:9px;cursor:pointer;
+    background:var(--surface-1);color:var(--text-primary);border:1px solid var(--border);}
+  .btn:hover{border-color:var(--border-strong)}
+  .btn[aria-pressed="true"]{background:var(--text-primary);color:var(--surface-1);border-color:var(--text-primary)}
+
+  /* KPI tiles */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(176px,1fr));gap:12px;margin:22px 0 20px}
+  .kpi{background:var(--surface-1);border:1px solid var(--border);border-radius:13px;padding:14px 16px}
+  .kpi .k{font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px}
+  .kpi .v{font-size:27px;font-weight:620;letter-spacing:-.02em;line-height:1.15;
+    font-variant-numeric:tabular-nums}
+  .kpi .n{font-size:12.5px;color:var(--text-secondary);margin-top:3px}
+
+  /* controls */
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
+  .bar .lbl{font-size:12px;color:var(--text-muted);margin-right:2px}
+  .sep{width:1px;height:22px;background:var(--border);margin:0 6px}
+
+  .card{background:var(--surface-1);border:1px solid var(--border);border-radius:15px;padding:16px 18px 10px;margin-bottom:18px}
+  .card h2{font-size:16px;margin:0 0 2px;font-weight:620;letter-spacing:-.01em}
+  .card .note{font-size:12.5px;color:var(--text-secondary);margin:0 0 8px}
+  .chart{width:100%}
+  #cPe{height:600px} #cPx{height:520px} #cFx{height:520px}
+
+  /* legend chips */
+  .legend{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:4px 0 0}
+  .chip{display:inline-flex;align-items:center;gap:7px;font:inherit;font-size:12.5px;
+    padding:6px 11px;border-radius:999px;cursor:pointer;background:var(--surface-2);
+    border:1px solid var(--border);color:var(--text-primary)}
+  .chip .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .chip[aria-pressed="false"]{opacity:.42}
+  .chip.hl{border-color:var(--border-strong);box-shadow:inset 0 0 0 1px var(--border-strong);font-weight:620}
+
+  /* tooltip */
+  #tip{position:fixed;z-index:60;pointer-events:none;display:none;min-width:150px;
+    background:var(--surface-1);border:1px solid var(--border-strong);border-radius:10px;
+    padding:9px 11px;box-shadow:0 6px 22px rgba(0,0,0,.17)}
+  #tip .tv{font-size:21px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.2}
+  #tip .tn{font-size:12px;color:var(--text-secondary);margin-top:1px}
+  #tip .td{font-size:11.5px;color:var(--text-muted);margin-top:4px;font-variant-numeric:tabular-nums}
+
+  /* table */
+  #tableWrap{display:none;margin-top:4px;max-height:520px;overflow:auto;border:1px solid var(--border);border-radius:11px}
+  table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 11px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border)}
+  th{position:sticky;top:0;background:var(--surface-2);color:var(--text-secondary);
+    font-weight:600;font-size:12px;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  tbody tr:hover{background:var(--surface-2)}
+
+  footer{margin-top:26px;font-size:13px;color:var(--text-secondary);line-height:1.75}
+  footer h3{font-size:14.5px;color:var(--text-primary);margin:0 0 6px}
+  footer code{background:var(--surface-2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .warn{border-left:3px solid var(--series-px);padding-left:12px;margin:12px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Nifty 50 — PER · 지수가격 월별 트렌드</h1>
+      <p class="sub" id="subline"></p>
+    </div>
+    <button class="btn" id="themeBtn" type="button">다크/라이트</button>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="bar">
+    <span class="lbl">기간</span>
+    <button class="btn" data-range="all" type="button">전체</button>
+    <button class="btn" data-range="20" type="button">20년</button>
+    <button class="btn" data-range="10" type="button">10년</button>
+    <button class="btn" data-range="5" type="button">5년</button>
+    <button class="btn" data-range="3" type="button">3년</button>
+    <button class="btn" data-range="ytd" type="button">YTD</button>
+    <span class="sep"></span>
+    <button class="btn" id="curBtn" type="button" aria-pressed="false">가격 통화: INR</button>
+    <button class="btn" id="logBtn" type="button" aria-pressed="true">가격 로그축</button>
+    <button class="btn" id="normBtn" type="button" aria-pressed="false">구간 시작=100</button>
+    <button class="btn" id="bandBtn" type="button" aria-pressed="true">PER 중앙값 ±1σ</button>
+    <span class="sep"></span>
+    <button class="btn" id="tableBtn" type="button" aria-pressed="false">표로 보기</button>
+  </div>
+
+  <div class="legend" id="legend">
+    <button class="chip" id="allChip" type="button" aria-pressed="true"><span class="sw" style="background:var(--text-muted)"></span>전체 해제</button>
+  </div>
+
+  <div class="card" id="cardPe">
+    <h2>PER (주가수익비율)</h2>
+    <p class="note" id="notePe"></p>
+    <div class="chart" id="cPe"></div>
+  </div>
+
+  <div class="card" id="cardPx">
+    <h2>지수가격</h2>
+    <p class="note" id="notePx"></p>
+    <div class="chart" id="cPx"></div>
+  </div>
+
+  <div class="card" id="cardFx">
+    <h2>현지통화 vs 원화 환산 (구간 시작 = 100)</h2>
+    <p class="note" id="noteFx"></p>
+    <div class="chart" id="cFx"></div>
+  </div>
+
+  <div id="tableWrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+
+  <footer id="foot"></footer>
+</div>
+
+<div id="tip" role="status" aria-live="polite">
+  <div class="tv" id="tipV"></div>
+  <div class="tn" id="tipN"></div>
+  <div class="td" id="tipD"></div>
+</div>
+
+<script src="./echarts.min.js"></script>
+<script src="./data.js"></script>
+<script>
+(function(){
+  var D = window.DASHBOARD_DATA, M = D.meta, R = D.rows;
+  var css = function(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); };
+  var fmt = function(v,d){ return v==null ? '—' : v.toLocaleString('ko-KR',{minimumFractionDigits:d,maximumFractionDigits:d}); };
+  var ymToTs = function(ym){ var p=ym.split('-'); return Date.UTC(+p[0], +p[1]-1, 1); };
+  R.forEach(function(r){ r.ts = ymToTs(r.ym); });
+
+  var SERIES = [
+    { id:'pe', name:'PER', color:'--series-pe' },
+    { id:'px', name:'지수가격', color:'--series-px' },
+    { id:'fx', name:'원화 환산 비교', color:'--series-krw' }
+  ];
+  var on = { pe:true, px:true, fx:true };
+  var showLog = true, showNorm = false, showBand = true, curKrw = false;
+  var zoomStart = R[0].ts, zoomEnd = R[R.length-1].ts;
+
+  /* ---------- header + KPI ---------- */
+  var last = R[R.length-1], first = R[0];
+  var years = (R.length-1)/12;
+  var mult = last.px/first.px, cagr = (Math.pow(mult, 1/years)-1)*100;
+  var sorted = R.map(function(r){return r.pe;}).sort(function(a,b){return a-b;});
+  var pct = 0; while(pct<sorted.length && sorted[pct] < last.pe) pct++;
+  var pctile = pct/sorted.length*100;
+
+  document.getElementById('subline').textContent =
+    M.first + ' ~ ' + M.last + ' · ' + M.n + '개월 (' + years.toFixed(1) + '년) · 월초 기준 · 갱신 ' + M.updated;
+
+  var multK = last.pxKrw/first.pxKrw;
+  var kpiDefs = [
+    ['현재 PER', fmt(last.pe,2), '중앙값 ' + fmt(M.median,2) + ' 대비 ' + (last.pe<M.median?'−':'+') + fmt(Math.abs(last.pe-M.median),2)],
+    ['PER 백분위', Math.round(pctile) + '%', years.toFixed(1) + '년 중 하위 ' + Math.round(pctile) + '% (낮을수록 저평가)'],
+    ['CAGR 현지통화', M.cagrInr.toFixed(2) + '%', 'INR 기준 · ' + mult.toFixed(1) + '배 (배당 제외)'],
+    ['CAGR 원화 환산', M.cagrKrw.toFixed(2) + '%', 'KRW 기준 · ' + multK.toFixed(1) + '배'],
+    ['환율이 깎은 폭', '−' + (M.cagrInr-M.cagrKrw).toFixed(2) + '%p', '연율 기준 · 루피 약세분'],
+    ['환율 KRW/INR', fmt(last.fx,2), M.fxFirst.toFixed(1) + ' → ' + M.fxLast.toFixed(1)
+      + ' (' + ((M.fxLast/M.fxFirst-1)*100).toFixed(0) + '%)']
+  ];
+  document.getElementById('kpis').innerHTML = kpiDefs.map(function(d){
+    return '<div class="kpi"><div class="k"></div><div class="v"></div><div class="n"></div></div>';
+  }).join('');
+  Array.prototype.forEach.call(document.querySelectorAll('#kpis .kpi'), function(el,i){
+    el.querySelector('.k').textContent = kpiDefs[i][0];
+    el.querySelector('.v').textContent = kpiDefs[i][1];
+    el.querySelector('.n').textContent = kpiDefs[i][2];
+  });
+
+  document.getElementById('notePe').textContent =
+    'NSE Indices 공시 PER. 지수 추종 ETF(TIGER·KODEX 인도니프티50)의 PER은 사실상 이 값과 같다. '
+    + '점선 = 전 구간 중앙값 ' + fmt(M.median,2) + '배, 음영 = ±1σ ('
+    + fmt(M.median-M.sd,2) + ' ~ ' + fmt(M.median+M.sd,2) + ').';
+  document.getElementById('noteFx').textContent =
+    '같은 구간을 100으로 맞춰 겹친 것 — 두 선의 벌어짐이 곧 환율 효과다. '
+    + '실선 = 현지통화(INR), 점선 = 원화 환산(KRW). '
+    + '전 구간 기준 환율은 ' + M.fxFirst.toFixed(2) + ' → ' + M.fxLast.toFixed(2)
+    + '원/루피로 ' + ((1-M.fxLast/M.fxFirst)*100).toFixed(0) + '% 하락(루피 약세)했고, '
+    + '그만큼 원화 투자자의 수익률이 깎였다.';
+  document.getElementById('notePx').textContent =
+    'Nifty 50 지수 포인트, 인도 루피 기준 · 배당 제외. 원화 환산이 아니므로 국내 상장 ETF 수익률과는 환율만큼 차이가 난다. '
+    + '27.8년간 24배라 로그축이 기본 — 선형으로 보려면 「가격 로그축」을 끈다.';
+
+  /* ---------- legend chips ---------- */
+  var legend = document.getElementById('legend');
+  SERIES.forEach(function(s){
+    var b = document.createElement('button');
+    b.className='chip'; b.type='button'; b.dataset.sid=s.id; b.setAttribute('aria-pressed','true');
+    var sw=document.createElement('span'); sw.className='sw'; sw.style.background='var('+s.color+')';
+    b.appendChild(sw); b.appendChild(document.createTextNode(s.name));
+    b.addEventListener('click', function(){ on[s.id]=!on[s.id]; syncChips(); render(true); });
+    b.addEventListener('mouseenter', function(){ highlight(s.id); });
+    b.addEventListener('mouseleave', function(){ highlight(null); });
+    legend.appendChild(b);
+  });
+  var allChip = document.getElementById('allChip');
+  allChip.addEventListener('click', function(){
+    var allOn = SERIES.every(function(s){ return on[s.id]; });
+    SERIES.forEach(function(s){ on[s.id] = !allOn; });
+    syncChips(); render(true);
+  });
+  function syncChips(){
+    SERIES.forEach(function(s){
+      var c = legend.querySelector('.chip[data-sid="'+s.id+'"]');
+      c.setAttribute('aria-pressed', on[s.id] ? 'true':'false');
+    });
+    var allOn = SERIES.every(function(s){ return on[s.id]; });
+    allChip.textContent = '';
+    var sw=document.createElement('span'); sw.className='sw'; sw.style.background='var(--text-muted)';
+    allChip.appendChild(sw);
+    allChip.appendChild(document.createTextNode(allOn ? '전체 해제' : '전체 선택'));
+    allChip.setAttribute('aria-pressed', allOn ? 'true':'false');
+    document.getElementById('cardPe').style.display = on.pe ? '' : 'none';
+    document.getElementById('cardPx').style.display = on.px ? '' : 'none';
+    document.getElementById('cardFx').style.display = on.fx ? '' : 'none';
+  }
+  function highlight(sid){
+    SERIES.forEach(function(s){
+      var c = legend.querySelector('.chip[data-sid="'+s.id+'"]');
+      if(c) c.classList.toggle('hl', sid===s.id);
+    });
+  }
+
+  /* ---------- charts ---------- */
+  var chPe = echarts.init(document.getElementById('cPe'));
+  var chPx = echarts.init(document.getElementById('cPx'));
+  var chFx = echarts.init(document.getElementById('cFx'));
+  var charts = [chPe, chPx, chFx];
+
+  function visRows(){ return R.filter(function(r){ return r.ts>=zoomStart && r.ts<=zoomEnd; }); }
+
+  function baseOpt(){
+    return {
+      backgroundColor:'transparent',
+      animation:false,
+      textStyle:{ color: css('--text-secondary'), fontFamily:'inherit' },
+      grid:{ left:72, right:30, top:48, bottom:74 },
+      tooltip:{ show:false },
+      xAxis:{ type:'time',
+        axisLine:{ lineStyle:{ color: css('--border') } },
+        axisTick:{ show:false },
+        axisLabel:{ color: css('--text-muted'), fontSize:12, hideOverlap:true },
+        splitLine:{ show:false } },
+      dataZoom:[
+        { type:'inside', xAxisIndex:0, startValue:zoomStart, endValue:zoomEnd, zoomOnMouseWheel:true },
+        { type:'slider', xAxisIndex:0, startValue:zoomStart, endValue:zoomEnd,
+          height:30, bottom:16, borderColor: css('--border'),
+          backgroundColor:'transparent', fillerColor: css('--band'),
+          handleStyle:{ color: css('--border-strong') },
+          moveHandleStyle:{ color: css('--border-strong') },
+          dataBackground:{ lineStyle:{ color: css('--border-strong') }, areaStyle:{ color:'transparent' } },
+          selectedDataBackground:{ lineStyle:{ color: css('--text-muted') }, areaStyle:{ color:'transparent' } },
+          textStyle:{ color: css('--text-muted'), fontSize:11 } }
+      ]
+    };
+  }
+
+  function renderPe(){
+    var o = baseOpt();
+    var marks = [];
+    if(showBand){
+      // 라벨을 선 위에 얹으면 데이터와 겹친다 → 카드 설명문(note)으로 직접 표기
+      marks.push({ name:'중앙값', yAxis:M.median,
+        lineStyle:{ color: css('--ref'), width:1, type:'dashed' },
+        label:{ show:false } });
+    }
+    o.yAxis = { type:'value', name:'PER (배)',
+      nameLocation:'end', nameGap:20,
+      nameTextStyle:{ color: css('--text-muted'), fontSize:12, align:'left' },
+      scale:true,
+      axisLine:{ show:false }, axisTick:{ show:false },
+      axisLabel:{ color: css('--text-muted'), fontSize:12 },
+      splitLine:{ lineStyle:{ color: css('--border') } } };
+    o.series = [{
+      name:'PER', type:'line', showSymbol:false, symbolSize:9,
+      lineStyle:{ width:2, color: css('--series-pe') },
+      itemStyle:{ color: css('--series-pe'), borderColor: css('--surface-1'), borderWidth:2 },
+      data: R.map(function(r){ return [r.ts, r.pe]; }),
+      markLine: marks.length ? { silent:true, symbol:'none', data:marks } : undefined,
+      markArea: showBand ? { silent:true, itemStyle:{ color: css('--band') },
+        data:[[{ yAxis: M.median-M.sd },{ yAxis: M.median+M.sd }]] } : undefined
+    }];
+    chPe.setOption(o, true);
+  }
+
+  function pxOf(r){ return curKrw ? r.pxKrw : r.px; }
+  function renderPx(){
+    var o = baseOpt();
+    var vis = visRows();
+    var b = vis.length ? pxOf(vis[0]) : pxOf(R[0]);
+    var col = curKrw ? css('--series-krw') : css('--series-px');
+    var data = R.map(function(r){ return [r.ts, showNorm ? +(pxOf(r)/b*100).toFixed(2) : pxOf(r)]; });
+    var vv = data.map(function(d){ return d[1]; });
+    var lo = Math.min.apply(null, vv), hi = Math.max.apply(null, vv);
+    o.yAxis = { type: showLog ? 'log' : 'value',
+      name: showNorm ? '구간 시작=100' : (curKrw ? '원화 환산 (원)' : '지수 포인트 (INR)'),
+      nameLocation:'end', nameGap:20,
+      nameTextStyle:{ color: css('--text-muted'), fontSize:12, align:'left' },
+      scale:true,
+      min: showLog ? +(lo*0.88).toPrecision(2) : undefined,
+      max: showLog ? +(hi*1.12).toPrecision(3) : undefined,
+      axisLine:{ show:false }, axisTick:{ show:false },
+      axisLabel:{ color: css('--text-muted'), fontSize:12,
+        formatter:function(v){ return v>=1000 ? (v/1000)+'k' : v; } },
+      splitLine:{ lineStyle:{ color: css('--border') } } };
+    o.series = [{
+      name: curKrw ? '지수가격(원화 환산)' : '지수가격(INR)',
+      type:'line', showSymbol:false, symbolSize:9,
+      lineStyle:{ width:2, color: col },
+      itemStyle:{ color: col, borderColor: css('--surface-1'), borderWidth:2 },
+      data: data
+    }];
+    if(showNorm){
+      o.series[0].markLine = { silent:true, symbol:'none', data:[{ yAxis:100,
+        lineStyle:{ color: css('--ref'), width:1, type:'dashed' },
+        label:{ formatter:'100', position:'insideStartTop', color: css('--text-muted'), fontSize:11 } }] };
+    }
+    chPx.setOption(o, true);
+  }
+
+  function renderFx(){
+    var o = baseOpt();
+    var vis = visRows();
+    var bi = vis.length ? vis[0].px : R[0].px;
+    var bk = vis.length ? vis[0].pxKrw : R[0].pxKrw;
+    o.grid.right = 96;                 // endLabel 자리
+    o.yAxis = { type:'value', name:'구간 시작 = 100',
+      nameLocation:'end', nameGap:20,
+      nameTextStyle:{ color: css('--text-muted'), fontSize:12, align:'left' },
+      scale:true, axisLine:{ show:false }, axisTick:{ show:false },
+      axisLabel:{ color: css('--text-muted'), fontSize:12 },
+      splitLine:{ lineStyle:{ color: css('--border') } } };
+    function mk(name, col, key, dashed){
+      return { name:name, type:'line', showSymbol:false, symbolSize:9,
+        lineStyle:{ width:2, color:col, type: dashed ? 'dashed' : 'solid' },
+        itemStyle:{ color:col, borderColor: css('--surface-1'), borderWidth:2 },
+        // 라이트모드 aqua 는 대비 3:1 미만 → 직접 라벨로 relief
+        endLabel:{ show:true, formatter:name, color:col, fontSize:12, distance:6 },
+        data: R.map(function(r){
+          var v = key==='inr' ? r.px/bi*100 : r.pxKrw/bk*100;
+          return [r.ts, +v.toFixed(2)];
+        }) };
+    }
+    o.series = [ mk('현지통화(INR)', css('--series-px'), 'inr', false),
+                 mk('원화 환산(KRW)', css('--series-krw'), 'krw', true) ];
+    o.series[0].markLine = { silent:true, symbol:'none', data:[{ yAxis:100,
+      lineStyle:{ color: css('--ref'), width:1, type:'dotted' }, label:{ show:false } }] };
+    chFx.setOption(o, true);
+  }
+
+  function render(keepZoom){
+    renderPe(); renderPx(); renderFx(); renderTable();
+    if(!keepZoom) return;
+  }
+
+  /* ---------- custom tooltip (verified approach) ---------- */
+  var tip=document.getElementById('tip'), tipV=document.getElementById('tipV'),
+      tipN=document.getElementById('tipN'), tipD=document.getElementById('tipD');
+  function wireTip(chart, sid){
+    var s = SERIES.filter(function(x){return x.id===sid;})[0];
+    chart.getZr().on('mousemove', function(e){
+      // ⚠️ convertFromPixel({xAxisIndex:0},[x,y]) 는 이 버전에서 null 을 반환한다 → gridIndex 를 쓴다
+      var x = null;
+      try {
+        var v = chart.convertFromPixel({ gridIndex:0 }, [e.offsetX, e.offsetY]);
+        if(v) x = v[0];
+        if(x==null) x = chart.convertFromPixel({ xAxisIndex:0 }, e.offsetX);
+      } catch(err){ return; }
+      if(x==null || isNaN(x)){ tip.style.display='none'; return; }
+      var best=null, bd=Infinity;
+      for(var i=0;i<R.length;i++){
+        var d=Math.abs(R[i].ts - x);
+        if(d<bd){ bd=d; best=R[i]; }
+      }
+      if(!best){ tip.style.display='none'; return; }
+      var vis=visRows();
+      var bi = vis.length?vis[0].px:R[0].px, bk = vis.length?vis[0].pxKrw:R[0].pxKrw;
+      if(sid==='pe'){
+        tipV.textContent = fmt(best.pe,2) + '배';
+        tipN.textContent = 'PER · ' + best.ym;
+        var gap = best.pe - M.median;
+        tipD.textContent = '중앙값 대비 ' + (gap<0?'−':'+') + fmt(Math.abs(gap),2)
+          + '  ·  PBR ' + fmt(best.pb,2) + '  ·  배당 ' + fmt(best.dy,2) + '%';
+      } else if(sid==='px'){
+        var bb = curKrw ? bk : bi, vv = curKrw ? best.pxKrw : best.px;
+        tipV.textContent = showNorm ? fmt(vv/bb*100,1)
+          : (curKrw ? fmt(vv,0)+'원' : fmt(vv,0)+' pt');
+        tipN.textContent = (curKrw ? '지수가격(원화 환산)' : '지수가격(INR)') + ' · ' + best.ym;
+        var ret = (vv/bb-1)*100;
+        tipD.textContent = '구간 시작 대비 ' + (ret<0?'−':'+') + fmt(Math.abs(ret),1) + '%'
+          + '  ·  환율 ' + fmt(best.fx,2) + '원/루피  ·  PER ' + fmt(best.pe,2);
+      } else {
+        var ri = (best.px/bi-1)*100, rk = (best.pxKrw/bk-1)*100;
+        tipV.textContent = fmt(best.pxKrw/bk*100,1);
+        tipN.textContent = '원화 환산 · ' + best.ym + ' (현지통화 ' + fmt(best.px/bi*100,1) + ')';
+        tipD.textContent = '구간 시작 대비  KRW ' + (rk<0?'−':'+') + fmt(Math.abs(rk),1) + '%'
+          + ' / INR ' + (ri<0?'−':'+') + fmt(Math.abs(ri),1) + '%'
+          + '  ·  환율 ' + fmt(best.fx,2) + '원/루피';
+      }
+      highlight(sid);
+      var pad=14, w=tip.offsetWidth||190, h=tip.offsetHeight||80;
+      var L=e.event.clientX+pad, T=e.event.clientY+pad;
+      if(L+w>innerWidth-8) L=e.event.clientX-w-pad;
+      if(T+h>innerHeight-8) T=e.event.clientY-h-pad;
+      tip.style.left=L+'px'; tip.style.top=T+'px'; tip.style.display='block';
+    });
+    chart.getZr().on('globalout', function(){ tip.style.display='none'; highlight(null); });
+  }
+  wireTip(chPe,'pe'); wireTip(chPx,'px'); wireTip(chFx,'fx');
+
+  /* ---------- zoom sync ---------- */
+  var syncing=false;
+  charts.forEach(function(c){
+    c.on('dataZoom', function(){
+      if(syncing) return;
+      var opt = c.getOption(); if(!opt) return;
+      var dz = opt.dataZoom[0], g = opt.grid[0];
+      var sv = dz.startValue, evv = dz.endValue;
+      if(sv==null || evv==null){   // 퍼센트만 올 때: 그리드 양 끝의 실제 시각으로 환산
+        try{
+          var midY = g.top + 10;
+          sv  = c.convertFromPixel({gridIndex:0}, [g.left, midY])[0];
+          evv = c.convertFromPixel({gridIndex:0}, [c.getWidth()-g.right, midY])[0];
+        }catch(err){ return; }
+      }
+      zoomStart = sv; zoomEnd = evv;
+      syncing=true;
+      charts.forEach(function(o){
+        if(o!==c) o.dispatchAction({ type:'dataZoom', startValue:zoomStart, endValue:zoomEnd });
+      });
+      syncing=false;
+      if(showNorm) renderPx();
+      renderTable();
+    });
+  });
+
+  function setRange(key){
+    var endTs = R[R.length-1].ts, startTs;
+    if(key==='all') startTs = R[0].ts;
+    else if(key==='ytd') startTs = Date.UTC(new Date(endTs).getUTCFullYear(), 0, 1);
+    else startTs = Date.UTC(new Date(endTs).getUTCFullYear()-(+key), new Date(endTs).getUTCMonth(), 1);
+    if(startTs < R[0].ts) startTs = R[0].ts;
+    zoomStart = startTs; zoomEnd = endTs;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-range]'), function(b){
+      b.setAttribute('aria-pressed', b.dataset.range===key ? 'true':'false');
+    });
+    // setOption 이 dataZoom startValue 를 그대로 싣는다 → dispatchAction 불필요
+    // (부팅 시점엔 아직 모델이 없어 dispatchAction 이 던진다 — 이게 초기 렌더 실패 원인이었다)
+    syncing = true; render(true); syncing = false;
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-range]'), function(b){
+    b.addEventListener('click', function(){ setRange(b.dataset.range); });
+  });
+
+  /* ---------- toggles ---------- */
+  function tog(id, get, set){
+    var el=document.getElementById(id);
+    el.addEventListener('click', function(){
+      set(!get()); el.setAttribute('aria-pressed', get()?'true':'false');
+      render(true);
+    });
+  }
+  (function(){
+    var el=document.getElementById('curBtn');
+    el.addEventListener('click', function(){
+      curKrw=!curKrw;
+      el.setAttribute('aria-pressed', curKrw?'true':'false');
+      el.textContent = '가격 통화: ' + (curKrw?'KRW':'INR');
+      render(true);
+    });
+  })();
+  tog('logBtn', function(){return showLog;}, function(v){showLog=v;});
+  tog('normBtn', function(){return showNorm;}, function(v){showNorm=v;});
+  tog('bandBtn', function(){return showBand;}, function(v){showBand=v;});
+
+  var tableBtn=document.getElementById('tableBtn'), tableWrap=document.getElementById('tableWrap');
+  tableBtn.addEventListener('click', function(){
+    var open = tableWrap.style.display==='block';
+    tableWrap.style.display = open ? 'none':'block';
+    tableBtn.setAttribute('aria-pressed', open?'false':'true');
+  });
+
+  function renderTable(){
+    var vis = visRows().slice().reverse();
+    var b = visRows().length ? visRows()[0].px : R[0].px;
+    var bk = visRows().length ? visRows()[0].pxKrw : R[0].pxKrw;
+    var head = ['월','PER','지수가격(INR)','원화 환산(원)','환율 원/루피','INR 100기준','KRW 100기준','PBR','배당%'];
+    var th = document.querySelector('#tbl thead'), tb = document.querySelector('#tbl tbody');
+    th.innerHTML=''; tb.innerHTML='';
+    var tr=document.createElement('tr');
+    head.forEach(function(h){ var c=document.createElement('th'); c.textContent=h; tr.appendChild(c); });
+    th.appendChild(tr);
+    vis.forEach(function(r){
+      var row=document.createElement('tr');
+      [r.ym, fmt(r.pe,2), fmt(r.px,2), fmt(r.pxKrw,0), fmt(r.fx,2),
+       fmt(r.px/b*100,2), fmt(r.pxKrw/bk*100,2), fmt(r.pb,2), fmt(r.dy,2)]
+        .forEach(function(v){ var c=document.createElement('td'); c.textContent=v; row.appendChild(c); });
+      tb.appendChild(row);
+    });
+  }
+
+  /* ---------- theme ---------- */
+  document.getElementById('themeBtn').addEventListener('click', function(){
+    var cur = document.documentElement.getAttribute('data-theme');
+    var isDark = cur==='dark' || (!cur && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', isDark ? 'light':'dark');
+    render(true);
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(){
+    if(!document.documentElement.getAttribute('data-theme')) render(true);
+  });
+  addEventListener('resize', function(){ charts.forEach(function(c){ c.resize(); }); });
+
+  /* ---------- footer ---------- */
+  document.getElementById('foot').innerHTML =
+    '<h3>읽는 법 · 산출 근거</h3>'
+   +'<p><b>PER</b>은 NSE Indices가 공시하는 Nifty 50 지수 PER이다. 지수를 복제하는 ETF(TIGER 인도니프티50 453870, KODEX 인도Nifty50 453810)의 PER은 사실상 이 값과 같으므로, ETF 보유종목을 역산할 필요 없이 지수 공시값을 그대로 쓴다.</p>'
+   +'<p><b>월초 기준이다.</b> 원천 데이터는 주간 시계열이고, 각 월의 첫 관측치를 그 달 값으로 썼다. 같은 사이트가 제공하는 월별 PER(일별 기준 월평균으로 추정)과 비교하면 평균절대차 0.51, 최대 5.20의 차이가 난다 — 월초 스냅샷과 월평균은 다른 값이라는 뜻이다. 가격과 PER을 <b>같은 관측일</b>로 맞추기 위해 주간 원본에서 직접 뽑았다.</p>'
+   +'<p><b>지수가격은 인도 루피(INR) 기준</b>이고 배당은 포함하지 않는다. 원화로 환산한 값이 아니므로, 국내 상장 인도 ETF의 실제 수익률은 여기에 <b>환율 변동</b>이 더해진다. 로그축을 기본으로 둔 이유는 27.8년간 24배가 올라 선형축에서는 초기 20년이 바닥에 깔려 보이지 않기 때문이다.</p>'
+   +'<p><b>PER 밴드</b>는 전 구간 중앙값 ' + fmt(M.median,2) + '배와 ±1표준편차(' + fmt(M.sd,2) + ') 구간이다. 평균 ' + fmt(M.mean,2) + '배, 최저 ' + fmt(M.min,2) + '배(' + M.minYm + '), 최고 ' + fmt(M.max,2) + '배(' + M.maxYm + ').</p>'
+   +'<p><b>원화 환산</b>은 월별 지수가격에 그 시점 <b>KRW/INR 환율</b>을 곱한 값이다. 환율은 미 연준 H.10을 쓰는 FRED의 <code>DEXKOUS</code>(원/달러)를 <code>DEXINUS</code>(루피/달러)로 나눠 구했고, FRED에 없는 6개월만 ECB 참조환율로 메웠다. <b>교차검증:</b> ' + M.fxCheck + '. 환산 수익률에 ETF 보수·거래비용·세금은 포함돼 있지 않다.</p>'
+   +'<div class="warn"><b>한계</b> — 공개 소스의 Nifty 50 PER·가격 시계열은 <b>1999-01부터</b>다. 지수 자체는 1996-04-22 산출 개시(기준시점 1995-11-03 = 1000pt)지만, 그 이전 구간의 월별 PER은 공개 데이터가 없다. NSE 공식 API(<code>api/historical/indicesHistory</code>)는 403으로 차단되고 stooq·MacroTrends도 봇 차단이다. 따라서 「30년」이 아니라 <b>27.8년</b>이 실측 가능한 최대 구간이다.</div>'
+   +'<p style="color:var(--text-muted)">출처: ' + M.source + ' · 갱신 ' + M.updated + ' · 개인 정리용, 투자 조언 아님.</p>';
+
+  /* ---------- boot ---------- */
+  syncChips();
+  render(false);          // 먼저 setOption 으로 모델을 만든다
+  setRange('all');        // 그 다음 구간 적용
+})();
+</script>
+</body>
+</html>

@@ -2,6 +2,13 @@
 
 각 ETF의 **설정일(첫 데이터월)=100** 기준 배당조정가(adj) 지수 시계열과, **수수료 총합(A+B+C+D)** 비교표를 함께 보는 인터랙티브 대시보드.
 
+## 대시보드 목록
+
+| | 내용 | 열기 |
+|---|---|---|
+| **ETF 지수·수수료** | 설정일=100 지수 시계열 + 수수료 총합(A+B+C+D) 비교 | [/](https://seohyunchoi123.github.io/etf-dashboard/) |
+| **Nifty 50 PER·지수가격** | 인도 Nifty 50 월별 PER·지수가격 27.8년(1999-01~) + **원화 환산** | [/nifty50/](https://seohyunchoi123.github.io/etf-dashboard/nifty50/) |
+
 ## 열기
 
 `index.html` 을 브라우저에서 열면 됩니다. 인터넷 없이 로컬(file://)에서도 동작합니다 — echarts를 동봉했습니다.
