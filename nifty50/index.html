@@ -116,7 +116,7 @@
     <button class="btn" data-range="3" type="button">3년</button>
     <button class="btn" data-range="ytd" type="button">YTD</button>
     <span class="sep"></span>
-    <button class="btn" id="curBtn" type="button" aria-pressed="false">가격 통화: INR</button>
+    <button class="btn" id="curBtn" type="button" aria-pressed="false">가격 통화: INR (환헤지)</button>
     <button class="btn" id="logBtn" type="button" aria-pressed="true">가격 로그축</button>
     <button class="btn" id="normBtn" type="button" aria-pressed="false">구간 시작=100</button>
     <button class="btn" id="bandBtn" type="button" aria-pressed="true">PER 중앙값 ±1σ</button>
@@ -141,7 +141,7 @@
   </div>
 
   <div class="card" id="cardFx">
-    <h2>현지통화 vs 원화 환산 (구간 시작 = 100)</h2>
+    <h2>환헤지 vs 환노출 (구간 시작 = 100)</h2>
     <p class="note" id="noteFx"></p>
     <div class="chart" id="cFx"></div>
   </div>
@@ -170,7 +170,7 @@
   var SERIES = [
     { id:'pe', name:'PER', color:'--series-pe' },
     { id:'px', name:'지수가격', color:'--series-px' },
-    { id:'fx', name:'원화 환산 비교', color:'--series-krw' }
+    { id:'fx', name:'환헤지 vs 환노출', color:'--series-krw' }
   ];
   var on = { pe:true, px:true, fx:true };
   var showLog = true, showNorm = false, showBand = true, curKrw = false;
@@ -191,9 +191,9 @@
   var kpiDefs = [
     ['현재 PER', fmt(last.pe,2), '중앙값 ' + fmt(M.median,2) + ' 대비 ' + (last.pe<M.median?'−':'+') + fmt(Math.abs(last.pe-M.median),2)],
     ['PER 백분위', Math.round(pctile) + '%', years.toFixed(1) + '년 중 하위 ' + Math.round(pctile) + '% (낮을수록 저평가)'],
-    ['CAGR 현지통화', M.cagrInr.toFixed(2) + '%', 'INR 기준 · ' + mult.toFixed(1) + '배 (배당 제외)'],
-    ['CAGR 원화 환산', M.cagrKrw.toFixed(2) + '%', 'KRW 기준 · ' + multK.toFixed(1) + '배'],
-    ['환율이 깎은 폭', '−' + (M.cagrInr-M.cagrKrw).toFixed(2) + '%p', '연율 기준 · 루피 약세분'],
+    ['CAGR 현지통화 (환헤지)', M.cagrInr.toFixed(2) + '%', 'INR 기준 · ' + mult.toFixed(1) + '배 · 헤지비용 0 가정'],
+    ['CAGR 원화 환산 (환노출)', M.cagrKrw.toFixed(2) + '%', 'KRW 기준 · ' + multK.toFixed(1) + '배 · 실제로 받는 수익률'],
+    ['환노출이 깎은 폭', '−' + (M.cagrInr-M.cagrKrw).toFixed(2) + '%p', '연율 · 루피 약세분 (헤지비용과 비교할 값)'],
     ['환율 KRW/INR', fmt(last.fx,2), M.fxFirst.toFixed(1) + ' → ' + M.fxLast.toFixed(1)
       + ' (' + ((M.fxLast/M.fxFirst-1)*100).toFixed(0) + '%)']
   ];
@@ -211,13 +211,13 @@
     + '점선 = 전 구간 중앙값 ' + fmt(M.median,2) + '배, 음영 = ±1σ ('
     + fmt(M.median-M.sd,2) + ' ~ ' + fmt(M.median+M.sd,2) + ').';
   document.getElementById('noteFx').textContent =
-    '같은 구간을 100으로 맞춰 겹친 것 — 두 선의 벌어짐이 곧 환율 효과다. '
-    + '실선 = 현지통화(INR), 점선 = 원화 환산(KRW). '
-    + '전 구간 기준 환율은 ' + M.fxFirst.toFixed(2) + ' → ' + M.fxLast.toFixed(2)
-    + '원/루피로 ' + ((1-M.fxLast/M.fxFirst)*100).toFixed(0) + '% 하락(루피 약세)했고, '
-    + '그만큼 원화 투자자의 수익률이 깎였다.';
+    '실선 = 현지통화 INR 기준 → 한국 투자자에겐 「환헤지(H)」에 해당. '
+    + '점선 = 원화 환산 KRW 기준 → 「환노출」(헤지 안 한 일반 버전). '
+    + '두 선의 벌어짐이 곧 환율 효과다. 환율 ' + M.fxFirst.toFixed(2) + ' → ' + M.fxLast.toFixed(2)
+    + '원/루피, ' + ((1-M.fxLast/M.fxFirst)*100).toFixed(0) + '% 하락(루피 약세). '
+    + '⚠️ 실선은 헤지 비용 0을 가정한 값이라 실제 환헤지 상품은 이보다 낮다 — 아래 설명 참고.';
   document.getElementById('notePx').textContent =
-    'Nifty 50 지수 포인트, 인도 루피 기준 · 배당 제외. 원화 환산이 아니므로 국내 상장 ETF 수익률과는 환율만큼 차이가 난다. '
+    '「통화: INR」 = 현지통화 기준 = 환헤지(H)에 해당 · 「통화: KRW」 = 원화 환산 = 환노출. 배당 제외. '
     + '27.8년간 24배라 로그축이 기본 — 선형으로 보려면 「가격 로그축」을 끈다.';
 
   /* ---------- legend chips ---------- */
@@ -332,7 +332,7 @@
     var vv = data.map(function(d){ return d[1]; });
     var lo = Math.min.apply(null, vv), hi = Math.max.apply(null, vv);
     o.yAxis = { type: showLog ? 'log' : 'value',
-      name: showNorm ? '구간 시작=100' : (curKrw ? '원화 환산 (원)' : '지수 포인트 (INR)'),
+      name: showNorm ? '구간 시작=100' : (curKrw ? '원화 환산 · 환노출 (원)' : '지수 포인트 · 환헤지 (INR)'),
       nameLocation:'end', nameGap:20,
       nameTextStyle:{ color: css('--text-muted'), fontSize:12, align:'left' },
       scale:true,
@@ -343,7 +343,7 @@
         formatter:function(v){ return v>=1000 ? (v/1000)+'k' : v; } },
       splitLine:{ lineStyle:{ color: css('--border') } } };
     o.series = [{
-      name: curKrw ? '지수가격(원화 환산)' : '지수가격(INR)',
+      name: curKrw ? '지수가격 (원화 환산 · 환노출)' : '지수가격 (INR · 환헤지)',
       type:'line', showSymbol:false, symbolSize:9,
       lineStyle:{ width:2, color: col },
       itemStyle:{ color: col, borderColor: css('--surface-1'), borderWidth:2 },
@@ -362,7 +362,7 @@
     var vis = visRows();
     var bi = vis.length ? vis[0].px : R[0].px;
     var bk = vis.length ? vis[0].pxKrw : R[0].pxKrw;
-    o.grid.right = 96;                 // endLabel 자리
+    o.grid.right = 120;                // endLabel 자리
     o.yAxis = { type:'value', name:'구간 시작 = 100',
       nameLocation:'end', nameGap:20,
       nameTextStyle:{ color: css('--text-muted'), fontSize:12, align:'left' },
@@ -380,8 +380,8 @@
           return [r.ts, +v.toFixed(2)];
         }) };
     }
-    o.series = [ mk('현지통화(INR)', css('--series-px'), 'inr', false),
-                 mk('원화 환산(KRW)', css('--series-krw'), 'krw', true) ];
+    o.series = [ mk('INR (환헤지)', css('--series-px'), 'inr', false),
+                 mk('KRW (환노출)', css('--series-krw'), 'krw', true) ];
     o.series[0].markLine = { silent:true, symbol:'none', data:[{ yAxis:100,
       lineStyle:{ color: css('--ref'), width:1, type:'dotted' }, label:{ show:false } }] };
     chFx.setOption(o, true);
@@ -424,16 +424,16 @@
         var bb = curKrw ? bk : bi, vv = curKrw ? best.pxKrw : best.px;
         tipV.textContent = showNorm ? fmt(vv/bb*100,1)
           : (curKrw ? fmt(vv,0)+'원' : fmt(vv,0)+' pt');
-        tipN.textContent = (curKrw ? '지수가격(원화 환산)' : '지수가격(INR)') + ' · ' + best.ym;
+        tipN.textContent = (curKrw ? '원화 환산 · 환노출' : 'INR · 환헤지') + ' · ' + best.ym;
         var ret = (vv/bb-1)*100;
         tipD.textContent = '구간 시작 대비 ' + (ret<0?'−':'+') + fmt(Math.abs(ret),1) + '%'
           + '  ·  환율 ' + fmt(best.fx,2) + '원/루피  ·  PER ' + fmt(best.pe,2);
       } else {
         var ri = (best.px/bi-1)*100, rk = (best.pxKrw/bk-1)*100;
         tipV.textContent = fmt(best.pxKrw/bk*100,1);
-        tipN.textContent = '원화 환산 · ' + best.ym + ' (현지통화 ' + fmt(best.px/bi*100,1) + ')';
-        tipD.textContent = '구간 시작 대비  KRW ' + (rk<0?'−':'+') + fmt(Math.abs(rk),1) + '%'
-          + ' / INR ' + (ri<0?'−':'+') + fmt(Math.abs(ri),1) + '%'
+        tipN.textContent = 'KRW 환노출 · ' + best.ym + ' (INR 환헤지 ' + fmt(best.px/bi*100,1) + ')';
+        tipD.textContent = '구간 시작 대비  환노출 ' + (rk<0?'−':'+') + fmt(Math.abs(rk),1) + '%'
+          + ' / 환헤지 ' + (ri<0?'−':'+') + fmt(Math.abs(ri),1) + '%'
           + '  ·  환율 ' + fmt(best.fx,2) + '원/루피';
       }
       highlight(sid);
@@ -504,7 +504,7 @@
     el.addEventListener('click', function(){
       curKrw=!curKrw;
       el.setAttribute('aria-pressed', curKrw?'true':'false');
-      el.textContent = '가격 통화: ' + (curKrw?'KRW':'INR');
+      el.textContent = '가격 통화: ' + (curKrw?'KRW (환노출)':'INR (환헤지)');
       render(true);
     });
   })();
@@ -523,7 +523,7 @@
     var vis = visRows().slice().reverse();
     var b = visRows().length ? visRows()[0].px : R[0].px;
     var bk = visRows().length ? visRows()[0].pxKrw : R[0].pxKrw;
-    var head = ['월','PER','지수가격(INR)','원화 환산(원)','환율 원/루피','INR 100기준','KRW 100기준','PBR','배당%'];
+    var head = ['월','PER','지수가격 INR (환헤지)','원화 환산 (환노출, 원)','환율 원/루피','환헤지 100기준','환노출 100기준','PBR','배당%'];
     var th = document.querySelector('#tbl thead'), tb = document.querySelector('#tbl tbody');
     th.innerHTML=''; tb.innerHTML='';
     var tr=document.createElement('tr');
@@ -558,6 +558,14 @@
    +'<p><b>지수가격은 인도 루피(INR) 기준</b>이고 배당은 포함하지 않는다. 원화로 환산한 값이 아니므로, 국내 상장 인도 ETF의 실제 수익률은 여기에 <b>환율 변동</b>이 더해진다. 로그축을 기본으로 둔 이유는 27.8년간 24배가 올라 선형축에서는 초기 20년이 바닥에 깔려 보이지 않기 때문이다.</p>'
    +'<p><b>PER 밴드</b>는 전 구간 중앙값 ' + fmt(M.median,2) + '배와 ±1표준편차(' + fmt(M.sd,2) + ') 구간이다. 평균 ' + fmt(M.mean,2) + '배, 최저 ' + fmt(M.min,2) + '배(' + M.minYm + '), 최고 ' + fmt(M.max,2) + '배(' + M.maxYm + ').</p>'
    +'<p><b>원화 환산</b>은 월별 지수가격에 그 시점 <b>KRW/INR 환율</b>을 곱한 값이다. 환율은 미 연준 H.10을 쓰는 FRED의 <code>DEXKOUS</code>(원/달러)를 <code>DEXINUS</code>(루피/달러)로 나눠 구했고, FRED에 없는 6개월만 ECB 참조환율로 메웠다. <b>교차검증:</b> ' + M.fxCheck + '. 환산 수익률에 ETF 보수·거래비용·세금은 포함돼 있지 않다.</p>'
+   +'<h3 style="margin-top:18px">어느 쪽이 환헤지이고 어느 쪽이 환노출인가</h3>'
+   +'<p><b>현지통화(INR) 선 = 환헤지(H) 버전.</b> 환헤지 상품의 목표가 「환율 영향을 걷어내고 기초지수의 현지통화 수익률을 그대로 주는 것」이라서다.<br>'
+   +'<b>원화 환산(KRW) 선 = 환노출 버전.</b> 종목명에 (H)가 없는 일반 상품이며, 원화 투자자가 실제로 손에 쥐는 수익률이다.</p>'
+   +'<p>⚠️ <b>다만 현지통화 선을 환헤지 수익률로 그대로 읽으면 안 된다.</b> 실제 환헤지에는 <b>두 나라 금리차만큼의 헤지 비용</b>이 붙는다(커버드 금리평형). '
+   +'2026-10 기준 인도 레포금리 5.50% vs 한국 기준금리 3.00% → <b>금리차 약 2.50%p</b>. 즉 실제 환헤지 상품은 이 선보다 연 2.5%p 가까이 낮게 나온다.</p>'
+   +'<p>그런데 이 구간에서 <b>환노출이 깎인 폭이 연 ' + (M.cagrInr-M.cagrKrw).toFixed(2) + '%p</b>였다. 헤지 비용(≈2.5%p)과 거의 같은 수준이다 — '
+   +'이론대로 선물환에 금리차가 선반영되기 때문이며, <b>장기로 보면 환헤지와 환노출의 손익이 서로 비슷해진다</b>는 뜻이다. '
+   +'고금리 통화(루피)에서는 「헤지하면 환위험이 공짜로 사라진다」가 성립하지 않는다.</p>'
    +'<div class="warn"><b>한계</b> — 공개 소스의 Nifty 50 PER·가격 시계열은 <b>1999-01부터</b>다. 지수 자체는 1996-04-22 산출 개시(기준시점 1995-11-03 = 1000pt)지만, 그 이전 구간의 월별 PER은 공개 데이터가 없다. NSE 공식 API(<code>api/historical/indicesHistory</code>)는 403으로 차단되고 stooq·MacroTrends도 봇 차단이다. 따라서 「30년」이 아니라 <b>27.8년</b>이 실측 가능한 최대 구간이다.</div>'
    +'<p style="color:var(--text-muted)">출처: ' + M.source + ' · 갱신 ' + M.updated + ' · 개인 정리용, 투자 조언 아님.</p>';
 
