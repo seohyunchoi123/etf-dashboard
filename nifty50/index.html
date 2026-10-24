@@ -9,6 +9,26 @@
   gtag('js', new Date());
 
   gtag('config', 'G-KH5GMQ9Z6F');
+
+  // 버튼 클릭 추적: 모든 <button> 클릭을 button_click 이벤트로 보낸다 (토글 결과까지)
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('button');
+    if (!b) return;
+    var label = (b.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+    var groupEl = b.parentElement && b.parentElement.closest('[id]');
+    var group = b.id || (groupEl ? groupEl.id : '') || (b.dataset.range ? 'range' : '');
+    setTimeout(function () {
+      var state = b.getAttribute('aria-pressed');
+      gtag('event', 'button_click', {
+        page_name: 'nifty50',
+        button_label: label,
+        button_group: group,
+        button_state: state === null ? '' : (state === 'true' ? 'on' : 'off')
+      });
+      // 핵심 기능 사용은 별도 이벤트로 (GA에서 주요 이벤트로 지정)
+      if (b.id === 'feeBtn' && state === 'true') gtag('event', 'fee_compare_view', { page_name: 'nifty50' });
+    }, 0);
+  }, true);
 </script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
